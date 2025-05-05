@@ -62,32 +62,71 @@
         <h2>SCALE PROPERTIES LIMITED</h2>
         <input type="text" id="username" placeholder="Username"><br>
         <input type="password" id="password" placeholder="Password"><br>
+        <input type="text" id="github-token" placeholder="GitHub Token (for writes)" style="display: none;"><br>
         <button id="login-button" onclick="login()">Login</button>
         <p id="login-error" class="error"></p>
         <footer>All Rights Reserved © SCALE PROPERTIES LIMITED 2025</footer>
     </div>
 
     <script>
-        // Inlined shared.js content
-        let users = JSON.parse(localStorage.getItem('users')) || {
-            admin: { password: 'admin123', isAdmin: true },
-            user: { password: 'user123', isAdmin: false }
-        };
-        let projects = JSON.parse(localStorage.getItem('projects')) || {
-            'Project1': {
-                'file1.txt': 'https://drive.google.com/file/d/1A2B3C4D5E6F7G8H9I0J1K2L3M4N5O6P7',
-                'file2.pdf': 'https://drive.google.com/file/d/2B3C4D5E6F7G8H9I0J1K2L3M4N5O6P8Q9'
-            },
-            'Project2': {
-                'doc1.docx': 'https://drive.google.com/file/d/3C4D5E6F7G8H9I0J1K2L3M4N5O6P8Q9R0'
-            }
-        };
-        let loginHistory = JSON.parse(localStorage.getItem('loginHistory')) || [];
+        let users = null;
+        let projects = null;
+        let loginHistory = null;
+        let githubToken = '';
 
-        function saveData() {
-            localStorage.setItem('users', JSON.stringify(users));
-            localStorage.setItem('projects', JSON.stringify(projects));
-            localStorage.setItem('loginHistory', JSON.stringify(loginHistory));
+        async function loadData() {
+            try {
+                const response = await fetch('/data.json?t=' + Date.now());
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const data = await response.json();
+                users = data.users;
+                projects = data.projects;
+                loginHistory = data.loginHistory;
+                console.log('Data loaded:', { users, projects, loginHistory });
+            } catch (e) {
+                console.error('Failed to load data.json:', e);
+                document.getElementById('login-error').textContent = 'Error loading data: ' + e.message;
+                document.getElementById('login-button').disabled = true;
+            }
+        }
+
+        async function saveData() {
+            if (!githubToken) {
+                console.warn('No GitHub token provided; data not saved to GitHub.');
+                return;
+            }
+            try {
+                const repo = 'username/file-management'; // Replace with your repo
+                const path = 'data.json';
+                const url = `https://api.github.com/repos/${repo}/contents/${path}`;
+                
+                // Get current file SHA
+                const getResponse = await fetch(url, {
+                    headers: { 'Authorization': `token ${githubToken}` }
+                });
+                const getData = await getResponse.json();
+                const sha = getData.sha;
+
+                // Update file
+                const content = btoa(JSON.stringify({ users, projects, loginHistory }, null, 2));
+                const response = await fetch(url, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `token ${githubToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: 'Update data.json',
+                        content: content,
+                        sha: sha
+                    })
+                });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                console.log('Data saved to GitHub');
+            } catch (e) {
+                console.error('Failed to save data:', e);
+                document.getElementById('login-error').textContent = 'Error saving data: ' + e.message;
+            }
         }
 
         function logout() {
@@ -103,28 +142,25 @@
             window.location.href = 'index.html';
         }
 
-        console.log('index.html script loaded');
-        console.log('users object defined:', users);
-
-        function login() {
+        async function login() {
             console.log('Login button clicked');
             try {
+                githubToken = document.getElementById('github-token').value;
+                if (!users) await loadData();
+                if (!users) throw new Error('Data not loaded');
+
                 const username = document.getElementById('username').value;
                 const password = document.getElementById('password').value;
                 const error = document.getElementById('login-error');
 
                 console.log('Attempting login with username:', username);
 
-                if (typeof users === 'undefined') {
-                    throw new Error('users object is not defined.');
-                }
-
                 if (users[username] && users[username].password === password) {
                     console.log('Login successful, redirecting to home.html');
                     sessionStorage.setItem('currentUser', username);
                     const loginTime = new Date().toLocaleString();
                     loginHistory.push({ username, loginTime, logoutTime: null });
-                    saveData();
+                    await saveData();
                     window.location.href = 'home.html';
                 } else {
                     console.log('Login failed: Invalid credentials');
@@ -135,6 +171,14 @@
                 document.getElementById('login-error').textContent = 'Login error: ' + e.message;
             }
         }
+
+        // Load data on page load
+        loadData().then(() => {
+            if (users) {
+                document.getElementById('login-button').disabled = false;
+                if (users.admin) document.getElementById('github-token').style.display = 'block';
+            }
+        });
     </script>
 </body>
 </html>
