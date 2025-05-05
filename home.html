@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home - SCALE PROPERTIES LIMITED</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 600px;
+            width: 100%;
+            padding: 20px;
+            background-color: #fff;
+            box-shadow: 0 0 5px rgba(0,0,0,0.1);
+            border-radius: 5px;
+            text-align: center;
+        }
+        a {
+            text-decoration: none;
+            color: #1e90ff;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        .success {
+            color: #228b22;
+        }
+        .error {
+            color: #dc143c;
+        }
+        input, button {
+            margin: 5px;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+        }
+        button {
+            background-color: #1e90ff;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #4682b4;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        h2, h3 {
+            color: #333;
+        }
+        footer {
+            text-align: center;
+            color: #666;
+            font-size: 12px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Welcome, <span id="current-user"></span></h2>
+        <p id="home-error" class="error"></p>
+        <button id="view-projects-button" onclick="window.location.href='projects.html'">View Projects</button>
+        <button id="logout-button" onclick="logout()">Logout</button>
+        <div id="admin-controls" style="display: none;">
+            <h3>Admin Controls</h3>
+            <input type="text" id="new-user" placeholder="New Username">
+            <input type="password" id="new-password" placeholder="New Password">
+            <button id="add-user-button" onclick="addUser()">Add User</button><br>
+            <input type="text" id="remove-user" placeholder="Username to Remove">
+            <button id="remove-user-button" onclick="removeUser()">Remove User</button><br>
+            <button id="login-history-button" onclick="window.location.href='login-history.html'">View Login History</button>
+            <button id="user-list-button" onclick="window.location.href='user-list.html'">View User List</button>
+            <p id="admin-message" class="success"></p>
+        </div>
+        <footer>All Rights Reserved © SCALE PROPERTIES LIMITED 2025</footer>
+    </div>
+
+    <script>
+        // Inlined shared.js content
+        let users = JSON.parse(localStorage.getItem('users')) || {
+            admin: { password: 'admin123', isAdmin: true },
+            user: { password: 'user123', isAdmin: false }
+        };
+        let projects = JSON.parse(localStorage.getItem('projects')) || {
+            'Project1': {
+                'file1.txt': 'https://drive.google.com/file/d/1A2B3C4D5E6F7G8H9I0J1K2L3M4N5O6P7',
+                'file2.pdf': 'https://drive.google.com/file/d/2B3C4D5E6F7G8H9I0J1K2L3M4N5O6P8Q9'
+            },
+            'Project2': {
+                'doc1.docx': 'https://drive.google.com/file/d/3C4D5E6F7G8H9I0J1K2L3M4N5O6P8Q9R0'
+            }
+        };
+        let loginHistory = JSON.parse(localStorage.getItem('loginHistory')) || [];
+
+        function saveData() {
+            localStorage.setItem('users', JSON.stringify(users));
+            localStorage.setItem('projects', JSON.stringify(projects));
+            localStorage.setItem('loginHistory', JSON.stringify(loginHistory));
+        }
+
+        function logout() {
+            const currentUser = sessionStorage.getItem('currentUser');
+            if (currentUser) {
+                const lastLogin = loginHistory.find(entry => entry.username === currentUser && !entry.logoutTime);
+                if (lastLogin) {
+                    lastLogin.logoutTime = new Date().toLocaleString();
+                    saveData();
+                }
+                sessionStorage.removeItem('currentUser');
+            }
+            window.location.href = 'index.html';
+        }
+
+        console.log('home.html script loaded');
+        console.log('users object defined:', users);
+
+        const currentUser = sessionStorage.getItem('currentUser');
+
+        if (!currentUser) {
+            window.location.href = 'index.html';
+        } else {
+            document.getElementById('current-user').textContent = currentUser;
+            if (users[currentUser].isAdmin) {
+                document.getElementById('admin-controls').style.display = 'block';
+            }
+        }
+
+        function addUser() {
+            if (!users[currentUser].isAdmin) return;
+            const username = document.getElementById('new-user').value;
+            const password = document.getElementById('new-password').value;
+            if (username && password && !users[username]) {
+                users[username] = { password, isAdmin: false };
+                saveData();
+                document.getElementById('admin-message').textContent = 'User added successfully';
+                document.getElementById('new-user').value = '';
+                document.getElementById('new-password').value = '';
+            } else {
+                document.getElementById('admin-message').textContent = 'Invalid username or user already exists';
+            }
+        }
+
+        function removeUser() {
+            if (!users[currentUser].isAdmin) return;
+            const username = document.getElementById('remove-user').value;
+            if (username !== currentUser && users[username]) {
+                delete users[username];
+                saveData();
+                document.getElementById('admin-message').textContent = 'User removed successfully';
+                document.getElementById('remove-user').value = '';
+            } else {
+                document.getElementById('admin-message').textContent = 'Cannot remove self or invalid user';
+            }
+        }
+    </script>
+</body>
+</html>
