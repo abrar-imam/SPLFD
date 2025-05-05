@@ -87,26 +87,63 @@
     </div>
 
     <script>
-        // Inlined shared.js content
-        let users = JSON.parse(localStorage.getItem('users')) || {
-            admin: { password: 'admin123', isAdmin: true },
-            user: { password: 'user123', isAdmin: false }
-        };
-        let projects = JSON.parse(localStorage.getItem('projects')) || {
-            'Project1': {
-                'file1.txt': 'https://drive.google.com/file/d/1A2B3C4D5E6F7G8H9I0J1K2L3M4N5O6P7',
-                'file2.pdf': 'https://drive.google.com/file/d/2B3C4D5E6F7G8H9I0J1K2L3M4N5O6P8Q9'
-            },
-            'Project2': {
-                'doc1.docx': 'https://drive.google.com/file/d/3C4D5E6F7G8H9I0J1K2L3M4N5O6P8Q9R0'
-            }
-        };
-        let loginHistory = JSON.parse(localStorage.getItem('loginHistory')) || [];
+        let users = null;
+        let projects = null;
+        let loginHistory = null;
+        let githubToken = sessionStorage.getItem('githubToken') || '';
 
-        function saveData() {
-            localStorage.setItem('users', JSON.stringify(users));
-            localStorage.setItem('projects', JSON.stringify(projects));
-            localStorage.setItem('loginHistory', JSON.stringify(loginHistory));
+        async function loadData() {
+            try {
+                const response = await fetch('/data.json?t=' + Date.now());
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const data = await response.json();
+                users = data.users;
+                projects = data.projects;
+                loginHistory = data.loginHistory;
+                console.log('Data loaded:', { users, projects, loginHistory });
+            } catch (e) {
+                console.error('Failed to load data.json:', e);
+                document.getElementById('home-error').textContent = 'Error loading data: ' + e.message;
+                document.getElementById('view-projects-button').disabled = true;
+                document.getElementById('logout-button').disabled = true;
+            }
+        }
+
+        async function saveData() {
+            if (!githubToken) {
+                console.warn('No GitHub token; data not saved to GitHub.');
+                return;
+            }
+            try {
+                const repo = 'username/file-management'; // Replace with your repo
+                const path = 'data.json';
+                const url = `https://api.github.com/repos/${repo}/contents/${path}`;
+                
+                const getResponse = await fetch(url, {
+                    headers: { 'Authorization': `token ${githubToken}` }
+                });
+                const getData = await getResponse.json();
+                const sha = getData.sha;
+
+                const content = btoa(JSON.stringify({ users, projects, loginHistory }, null, 2));
+                const response = await fetch(url, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `token ${githubToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: 'Update data.json',
+                        content: content,
+                        sha: sha
+                    })
+                });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                console.log('Data saved to GitHub');
+            } catch (e) {
+                console.error('Failed to save data:', e);
+                document.getElementById('home-error').textContent = 'Error saving data: ' + e.message;
+            }
         }
 
         function logout() {
@@ -118,31 +155,34 @@
                     saveData();
                 }
                 sessionStorage.removeItem('currentUser');
+                sessionStorage.removeItem('githubToken');
             }
             window.location.href = 'index.html';
         }
 
-        console.log('home.html script loaded');
-        console.log('users object defined:', users);
+        async function initialize() {
+            await loadData();
+            if (!users) return;
 
-        const currentUser = sessionStorage.getItem('currentUser');
+            const currentUser = sessionStorage.getItem('currentUser');
+            if (!currentUser) {
+                window.location.href = 'index.html';
+                return;
+            }
 
-        if (!currentUser) {
-            window.location.href = 'index.html';
-        } else {
             document.getElementById('current-user').textContent = currentUser;
             if (users[currentUser].isAdmin) {
                 document.getElementById('admin-controls').style.display = 'block';
             }
         }
 
-        function addUser() {
+        async function addUser() {
             if (!users[currentUser].isAdmin) return;
             const username = document.getElementById('new-user').value;
             const password = document.getElementById('new-password').value;
             if (username && password && !users[username]) {
                 users[username] = { password, isAdmin: false };
-                saveData();
+                await saveData();
                 document.getElementById('admin-message').textContent = 'User added successfully';
                 document.getElementById('new-user').value = '';
                 document.getElementById('new-password').value = '';
@@ -151,18 +191,20 @@
             }
         }
 
-        function removeUser() {
+        async function removeUser() {
             if (!users[currentUser].isAdmin) return;
             const username = document.getElementById('remove-user').value;
             if (username !== currentUser && users[username]) {
                 delete users[username];
-                saveData();
+                await saveData();
                 document.getElementById('admin-message').textContent = 'User removed successfully';
                 document.getElementById('remove-user').value = '';
             } else {
                 document.getElementById('admin-message').textContent = 'Cannot remove self or invalid user';
             }
         }
+
+        initialize();
     </script>
 </body>
 </html>
